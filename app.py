@@ -7,38 +7,32 @@ import urllib3
 urllib3.disable_warnings()
 
 app = Flask(__name__)
-app.secret_key = 'bronx_reverse_engineer_2024'
+app.secret_key = 'bronx_reverse_engineer_v4_2024'
 
 ADMIN_USER = "bronx"
 ADMIN_PASS = "ultra2026"
 
 # ============================================
-# 💀 ULTIMATE API REVERSE ENGINEER
+# 💀 ULTIMATE API REVERSE ENGINEER v4.0
 # ============================================
 def reverse_engineer_api(target_url, test_param="9876543210"):
-    """
-    ULTIMATE API FINDER - Works on ANY website/API type
-    """
-    all_logs = []  # EVERYTHING is logged
+    all_logs = []
     results = {
         'original_url': target_url,
         'real_api': None,
         'all_apis_found': [],
-        'all_requests_log': [],
+        'tested_apis': [],
         'error_logs': [],
         'success_logs': []
     }
     
     def log(msg, level="INFO"):
-        """Log EVERYTHING - no data lost"""
         entry = f"[{level}] {msg}"
         all_logs.append(entry)
-        if level == "ERROR":
-            results['error_logs'].append(msg)
-        elif level == "SUCCESS":
-            results['success_logs'].append(msg)
-        results['all_requests_log'].append(entry)
-        print(entry)  # Also print to console
+        if level == "ERROR": results['error_logs'].append(msg)
+        elif level == "SUCCESS": results['success_logs'].append(msg)
+        results['all_requests_log'] = all_logs
+        print(entry)
     
     log(f"🔍 STARTING REVERSE ENGINEER: {target_url}", "INFO")
     log(f"📋 Test Parameter: {test_param}", "INFO")
@@ -46,6 +40,8 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
     parsed_target = urlparse(target_url)
     base_url = f"{parsed_target.scheme}://{parsed_target.netloc}"
     domain = parsed_target.netloc
+    api_path = parsed_target.path
+    api_query = parsed_target.query
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
@@ -53,15 +49,63 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
         'Accept-Language': 'en-US,en;q=0.9',
     }
     
+    session_obj = requests.Session()
+    
     # ============================================
-    # PHASE 1: Direct Request & Response Analysis
+    # PHASE 1: DIRECT API DETECTION
     # ============================================
     log("=" * 50, "INFO")
-    log("PHASE 1: DIRECT REQUEST ANALYSIS", "INFO")
+    log("PHASE 1: DIRECT API DETECTION", "INFO")
+    
+    # Check if URL itself is an API endpoint
+    api_keywords = ['/api/', '/mobile/', '/info/', '/search/', '/lookup/', '/data/', '/check/', '/verify/', '/get/', '/query/', '/fetch/', '/number/', '/v1/', '/v2/']
+    
+    is_api_url = any(kw in target_url.lower() for kw in api_keywords)
+    
+    if is_api_url:
+        log("🎯 API ENDPOINT DETECTED IN URL!", "SUCCESS")
+        log(f"🎯 API PATH: {api_path}", "SUCCESS")
+        
+        # Extract API template
+        api_template = target_url
+        # Replace query parameter values with placeholders
+        if api_query:
+            params = api_query.split('&')
+            new_params = []
+            for p in params:
+                if '=' in p:
+                    key, val = p.split('=', 1)
+                    # Common parameter names to replace
+                    if key.lower() in ['num', 'number', 'mobile', 'phone', 'id', 'key', 'token', 'api_key', 'apikey', 'query', 'q', 'search', 'data', 'info']:
+                        new_params.append(f"{key}=PARAM")
+                    else:
+                        new_params.append(p)
+                else:
+                    new_params.append(p)
+            api_template = f"{parsed_target.scheme}://{parsed_target.netloc}{api_path}?{'&'.join(new_params)}"
+        else:
+            api_template = target_url
+        
+        log(f"🎯 API TEMPLATE: {api_template}", "SUCCESS")
+        results['real_api'] = api_template
+        
+        # Try the API with our test parameter
+        test_api = api_template.replace('PARAM', test_param)
+        try:
+            test_resp = session_obj.get(test_api, headers=headers, timeout=10, verify=False)
+            log(f"📡 Test Response: Status={test_resp.status_code}, Size={len(test_resp.text)} bytes", "SUCCESS")
+            log(f"📡 Sample: {test_resp.text[:300]}", "SUCCESS")
+        except Exception as e:
+            log(f"❌ Test failed: {str(e)[:80]}", "ERROR")
+    
+    # ============================================
+    # PHASE 2: DIRECT REQUEST & RESPONSE ANALYSIS
+    # ============================================
+    log("=" * 50, "INFO")
+    log("PHASE 2: RESPONSE ANALYSIS", "INFO")
     
     try:
-        session = requests.Session()
-        resp = session.get(target_url, headers=headers, timeout=20, allow_redirects=True, verify=False)
+        resp = session_obj.get(target_url, headers=headers, timeout=20, allow_redirects=True, verify=False)
         
         log(f"📡 Response Status: {resp.status_code}", "SUCCESS")
         log(f"📡 Final URL: {resp.url}", "SUCCESS")
@@ -72,86 +116,64 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
         for i, r in enumerate(resp.history):
             log(f"🔄 Redirect #{i+1}: {r.status_code} → {r.url}", "INFO")
         
-        # Log ALL response headers
-        log("📋 RESPONSE HEADERS:", "INFO")
-        for key, value in resp.headers.items():
-            log(f"   {key}: {value}", "INFO")
-        
         page_source = resp.text
         
         # ============================================
-        # PHASE 2: JavaScript Analysis
+        # PHASE 3: JAVASCRIPT ANALYSIS
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 2: JAVASCRIPT ANALYSIS", "INFO")
+        log("PHASE 3: JAVASCRIPT ANALYSIS", "INFO")
         
-        # Find ALL JavaScript files
+        # Find JavaScript files
         js_urls = []
         
-        # <script src="...">
         scripts = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', page_source)
         js_urls.extend(scripts)
         log(f"📁 Found {len(scripts)} <script> tags", "SUCCESS")
         
-        # import statements
         imports = re.findall(r'import\s+.*?from\s+["\']([^"\']+)["\']', page_source)
         js_urls.extend(imports)
-        log(f"📁 Found {len(imports)} import statements", "SUCCESS")
         
-        # require() calls
         requires = re.findall(r'require\(["\']([^"\']+)["\']\)', page_source)
         js_urls.extend(requires)
-        log(f"📁 Found {len(requires)} require() calls", "SUCCESS")
         
-        # Next.js chunks
         next_chunks = re.findall(r'(/_next/static/[^"\'\s]+\.js)', page_source)
         js_urls.extend(next_chunks)
-        log(f"📁 Found {len(next_chunks)} Next.js chunks", "SUCCESS")
         
         # Make absolute URLs
         absolute_js = []
         for js in js_urls:
-            if js.startswith('//'):
-                absolute_js.append(f"https:{js}")
-            elif js.startswith('/'):
-                absolute_js.append(urljoin(base_url, js))
-            elif js.startswith('http'):
-                absolute_js.append(js)
-            else:
-                absolute_js.append(urljoin(base_url, js))
+            if js.startswith('//'): absolute_js.append(f"https:{js}")
+            elif js.startswith('/'): absolute_js.append(urljoin(base_url, js))
+            elif js.startswith('http'): absolute_js.append(js)
+            else: absolute_js.append(urljoin(base_url, js))
         
         absolute_js = list(set(absolute_js))
         log(f"📁 Total unique JS files: {len(absolute_js)}", "SUCCESS")
         
-        # Scan EACH JS file for API patterns
+        # Scan JS files for API patterns
         all_api_patterns = []
         
-        for js_url in absolute_js[:20]:  # Scan up to 20 JS files
+        for js_url in absolute_js[:15]:
             try:
                 log(f"🔍 Scanning: {js_url[:80]}...", "INFO")
-                js_resp = session.get(js_url, headers=headers, timeout=10, verify=False)
+                js_resp = session_obj.get(js_url, headers=headers, timeout=10, verify=False)
                 js_content = js_resp.text
                 
-                # Pattern 1: Full API URLs
+                # Full API URLs
                 api_urls = re.findall(r'["\'\`](https?://[^"\'\`\s]{5,}?(?:api|mobile|info|search|lookup|data|get|fetch|query|backend|server|endpoint|number|check|verify)[^"\'\`\s]{0,100})["\'\`]', js_content, re.IGNORECASE)
                 if api_urls:
                     log(f"   ✅ Found {len(api_urls)} API URLs", "SUCCESS")
                     all_api_patterns.extend(api_urls)
                 
-                # Pattern 2: Variable assignments
-                var_patterns = [
-                    r'(?:const|let|var)\s+(\w*(?:API|api|BASE|base|URL|url|ENDPOINT|endpoint|BACKEND|backend|SERVER|server|HOST|host|ORIGIN|origin)\w*)\s*[=:]\s*["\'\`]([^"\'\`]+)["\'\`]',
-                    r'(\w*(?:API|api|BASE|base|URL|url|ENDPOINT|endpoint))\s*:\s*["\'\`]([^"\'\`]+)["\'\`]',
-                ]
+                # Variable assignments
+                var_matches = re.findall(r'(?:const|let|var)\s+(\w*(?:API|api|BASE|base|URL|url|ENDPOINT|endpoint|BACKEND|backend|SERVER|server|HOST|host|ORIGIN|origin)\w*)\s*[=:]\s*["\'\`]([^"\'\`]+)["\'\`]', js_content, re.IGNORECASE)
+                for var_name, var_value in var_matches:
+                    if len(var_value) > 5 and not var_value.endswith(('.js', '.css', '.png')):
+                        all_api_patterns.append(var_value)
+                        log(f"   📌 {var_name} = {var_value[:100]}", "SUCCESS")
                 
-                for vp in var_patterns:
-                    var_matches = re.findall(vp, js_content, re.IGNORECASE)
-                    for var_name, var_value in var_matches:
-                        if len(var_value) > 5 and not var_value.endswith(('.js', '.css', '.png', '.jpg')):
-                            all_api_patterns.append(var_value)
-                            log(f"   📌 {var_name} = {var_value[:100]}", "SUCCESS")
-                
-                # Pattern 3: fetch/axios calls
+                # fetch/axios calls
                 fetch_patterns = re.findall(r'fetch\(["\'\`]([^"\'\`]{5,})["\'\`]', js_content)
                 if fetch_patterns:
                     log(f"   📡 Found {len(fetch_patterns)} fetch() calls", "SUCCESS")
@@ -162,124 +184,81 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
                     log(f"   📡 Found {len(axios_patterns)} axios() calls", "SUCCESS")
                     all_api_patterns.extend(axios_patterns)
                 
-                # Pattern 4: Proxy/rewrite configs
-                proxy_matches = re.findall(r'["\']proxy["\']\s*:\s*["\']([^"\']{5,})["\']', js_content)
-                if proxy_matches:
-                    log(f"   🔄 Found {len(proxy_matches)} proxy configs", "SUCCESS")
-                    all_api_patterns.extend(proxy_matches)
-                
             except Exception as e:
                 log(f"   ❌ Failed: {str(e)[:80]}", "ERROR")
         
         # ============================================
-        # PHASE 3: HTML Meta & Config Analysis
+        # PHASE 4: HTML & CONFIG ANALYSIS
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 3: HTML & CONFIG ANALYSIS", "INFO")
+        log("PHASE 4: HTML & CONFIG ANALYSIS", "INFO")
         
-        # Meta tags with URLs
         meta_urls = re.findall(r'<meta[^>]+(?:content|value)=["\']([^"\']*(?:api|endpoint|url|host)[^"\']*)["\']', page_source, re.IGNORECASE)
         if meta_urls:
             log(f"🏷 Found {len(meta_urls)} meta URLs", "SUCCESS")
             all_api_patterns.extend(meta_urls)
         
-        # Data attributes
         data_attrs = re.findall(r'data-(?:api|url|endpoint|backend|host)=["\']([^"\']+)["\']', page_source)
         if data_attrs:
             log(f"🏷 Found {len(data_attrs)} data attributes", "SUCCESS")
             all_api_patterns.extend(data_attrs)
         
-        # Inline JSON configs
-        json_configs = re.findall(r'(?:config|settings|env)\s*=\s*({[^}]+})', page_source, re.IGNORECASE)
-        for jc in json_configs:
-            try:
-                urls_in_json = re.findall(r'["\']([^"\']*(?:api|url|endpoint|host)[^"\']*)["\']', jc, re.IGNORECASE)
-                all_api_patterns.extend(urls_in_json)
-            except:
-                pass
-        
         # ============================================
-        # PHASE 4: Serverless Function Detection
+        # PHASE 5: SERVERLESS FUNCTION DETECTION
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 4: SERVERLESS FUNCTION DETECTION", "INFO")
+        log("PHASE 5: SERVERLESS FUNCTION DETECTION", "INFO")
         
         serverless_paths = [
             '/api', '/api/v1', '/api/v2',
-            '/api/index', '/api/index.js', '/api/index.py', '/api/index.ts',
-            '/api/main', '/api/main.js', '/api/main.py',
+            '/api/index', '/api/index.js', '/api/index.py',
+            '/api/main', '/api/main.js',
             '/api/handler', '/api/handler.js',
             '/api/app', '/api/app.js',
-            '/api/server', '/api/server.js',
             '/api/number', '/api/mobile', '/api/info',
             '/api/search', '/api/lookup', '/api/data',
             '/api/check', '/api/verify', '/api/get',
             '/api/query', '/api/fetch', '/api/result',
             '/.netlify/functions/index', '/.netlify/functions/api',
-            '/.netlify/functions/main', '/.netlify/functions/handler',
             '/api/hello', '/api/test', '/api/health',
-            '/api/v1/search', '/api/v1/data', '/api/v1/info',
         ]
         
         for path in serverless_paths:
             test_url = f"{base_url}{path}"
             try:
-                test_resp = session.get(test_url, headers=headers, timeout=8, verify=False)
+                test_resp = session_obj.get(test_url, headers=headers, timeout=5, verify=False)
                 
                 if test_resp.status_code != 404:
-                    log(f"✅ [{test_resp.status_code}] {test_url} - Content-Type: {test_resp.headers.get('content-type', '?')}", "SUCCESS")
-                    
-                    # Check if response looks like API
-                    content = test_resp.text[:500]
-                    is_api = False
-                    
-                    # Check content type
+                    content = test_resp.text[:300]
                     ct = test_resp.headers.get('content-type', '')
-                    if 'json' in ct or 'xml' in ct:
-                        is_api = True
                     
-                    # Check if starts with JSON
-                    if content.strip().startswith(('{', '[', '<')):
-                        is_api = True
-                    
-                    if is_api:
-                        log(f"🎯 LIKELY API ENDPOINT: {test_url}", "SUCCESS")
+                    if 'json' in ct or content.strip().startswith(('{', '[')):
+                        log(f"✅ [{test_resp.status_code}] {test_url}", "SUCCESS")
                         all_api_patterns.append(test_url)
-                    
-                    # Log sample response
-                    log(f"   Sample: {content[:200]}", "INFO")
-                    
-            except Exception as e:
-                pass  # Expected for non-existent paths
+                        log(f"   Sample: {content[:150]}", "INFO")
+            except:
+                pass
         
         # ============================================
-        # PHASE 5: Environment & Config Probing
+        # PHASE 6: ENVIRONMENT PROBING
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 5: ENVIRONMENT PROBING", "INFO")
+        log("PHASE 6: ENVIRONMENT PROBING", "INFO")
         
-        env_files = [
-            '/.env', '/.env.local', '/.env.production', '/.env.development',
-            '/env.json', '/config.json', '/settings.json',
-            '/package.json', '/vercel.json', '/netlify.toml',
-            '/next.config.js', '/next.config.mjs',
-            '/app.config.js', '/app.config.json',
-        ]
+        env_files = ['/.env', '/.env.local', '/package.json', '/vercel.json', '/netlify.toml', '/next.config.js']
         
         for env_file in env_files:
             test_url = f"{base_url}{env_file}"
             try:
-                test_resp = session.get(test_url, headers=headers, timeout=5, verify=False)
+                test_resp = session_obj.get(test_url, headers=headers, timeout=5, verify=False)
                 if test_resp.status_code == 200:
                     log(f"📄 Found: {env_file} ({len(test_resp.text)} bytes)", "SUCCESS")
                     
-                    # Search for API URLs in config
                     config_urls = re.findall(r'["\'](https?://[^"\']{5,}(?:api|mobile|backend|server|endpoint)[^"\']{0,50})["\']', test_resp.text, re.IGNORECASE)
                     if config_urls:
                         log(f"   🔗 Found {len(config_urls)} API URLs", "SUCCESS")
                         all_api_patterns.extend(config_urls)
                     
-                    # Environment variables with API patterns
                     env_apis = re.findall(r'(?:API|BASE|BACKEND|SERVER|ENDPOINT)\w*\s*=\s*["\']?([^"\'\n\r]{5,})["\']?', test_resp.text, re.IGNORECASE)
                     if env_apis:
                         log(f"   🔑 Found {len(env_apis)} env API vars", "SUCCESS")
@@ -288,73 +267,62 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
                 pass
         
         # ============================================
-        # PHASE 6: Clean & Identify Real API
+        # PHASE 7: CLEAN & IDENTIFY REAL API
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 6: IDENTIFYING REAL API", "INFO")
+        log("PHASE 7: IDENTIFYING REAL API", "INFO")
         
         # Clean patterns
         clean_apis = []
         for api in all_api_patterns:
-            api = api.strip().strip('"').strip("'").strip('`').strip()
-            
-            # Skip non-API patterns
-            if not api or len(api) < 5:
-                continue
-            if any(skip in api.lower() for skip in ['.js', '.css', '.png', '.jpg', '.svg', '.woff', '.ico', 'localhost', '127.0.0.1']):
-                continue
-            if api.count('/') < 1:
-                continue
-            
-            clean_apis.append(api)
+            api = api.strip().strip('"').strip("'").strip('`')
+            if api and len(api) > 5:
+                if not any(skip in api.lower() for skip in ['.js', '.css', '.png', '.jpg', '.svg', 'localhost', '127.0.0.1']):
+                    if 'http' in api or api.startswith('/'):
+                        clean_apis.append(api)
         
         clean_apis = list(set(clean_apis))
         log(f"📊 Total unique API candidates: {len(clean_apis)}", "SUCCESS")
+        results['all_apis_found'] = clean_apis
         
-        # Filter: APIs that are DIFFERENT from target domain (backend)
+        # Filter backend APIs
         backend_apis = []
         for api in clean_apis:
             try:
                 if api.startswith('http'):
-                    api_domain = urlparse(api).netloc
-                    if api_domain != domain:
+                    if urlparse(api).netloc != domain:
                         backend_apis.append(api)
                 else:
                     backend_apis.append(api)
             except:
                 backend_apis.append(api)
         
-        # Filter: APIs containing common keywords
         keyword_apis = []
-        api_keywords = ['api', 'mobile', 'info', 'search', 'lookup', 'data', 'number', 'check', 'verify', 'get', 'query', 'fetch']
         for api in backend_apis:
             api_lower = api.lower()
-            if any(kw in api_lower for kw in api_keywords):
+            if any(kw in api_lower for kw in ['api', 'mobile', 'info', 'search', 'lookup', 'data', 'number']):
                 keyword_apis.append(api)
         
         # ============================================
-        # PHASE 7: Test Candidates
+        # PHASE 8: TEST CANDIDATES
         # ============================================
         log("=" * 50, "INFO")
-        log("PHASE 7: TESTING CANDIDATES", "INFO")
+        log("PHASE 8: TESTING CANDIDATES", "INFO")
         
         tested_apis = []
-        real_api = None
         
-        test_candidates = (keyword_apis or backend_apis or clean_apis)[:20]
-        
-        for candidate in test_candidates:
-            try:
-                # Build test URL with parameter
-                test_url = candidate
-                if not test_url.startswith('http'):
-                    test_url = urljoin(base_url, candidate)
-                
-                if '?' not in test_url:
-                    for param_name in ['num', 'number', 'mobile', 'phone', 'id', 'query', 'q', 'search']:
+        # If we didn't find API from URL, test candidates
+        if not results['real_api']:
+            test_candidates = (keyword_apis or backend_apis or clean_apis)[:15]
+            
+            for candidate in test_candidates:
+                try:
+                    test_url = candidate if candidate.startswith('http') else urljoin(base_url, candidate)
+                    
+                    for param_name in ['num', 'number', 'mobile', 'phone', 'id', 'query', 'q']:
                         test_full = f"{test_url}?{param_name}={test_param}"
                         try:
-                            test_resp = session.get(test_full, headers=headers, timeout=10, verify=False)
+                            test_resp = session_obj.get(test_full, headers=headers, timeout=10, verify=False)
                             
                             if test_resp.status_code == 200 and len(test_resp.text) > 30:
                                 tested_apis.append({
@@ -362,29 +330,24 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
                                     'test_url': test_full,
                                     'status': test_resp.status_code,
                                     'size': len(test_resp.text),
-                                    'content_type': test_resp.headers.get('content-type', '?'),
                                     'sample': test_resp.text[:300]
                                 })
                                 
                                 log(f"✅ [{test_resp.status_code}] {test_full} ({len(test_resp.text)} bytes)", "SUCCESS")
                                 
-                                # This is the REAL API!
-                                if real_api is None:
-                                    real_api = candidate
+                                if results['real_api'] is None:
+                                    results['real_api'] = candidate
                                     log(f"🎯 REAL API IDENTIFIED: {candidate}", "SUCCESS")
                                 break
                         except:
                             pass
-            except:
-                pass
+                except:
+                    pass
         
-        results['real_api'] = real_api
-        results['all_apis_found'] = clean_apis
         results['tested_apis'] = tested_apis
-        results['complete_logs'] = all_logs
         
         log(f"🏁 REVERSE ENGINEERING COMPLETE", "SUCCESS")
-        log(f"🎯 REAL API: {real_api or 'NOT FOUND'}", "SUCCESS" if real_api else "WARNING")
+        log(f"🎯 REAL API: {results['real_api'] or 'NOT FOUND'}", "SUCCESS" if results['real_api'] else "WARNING")
         
     except Exception as e:
         log(f"💥 CRITICAL ERROR: {str(e)}", "ERROR")
@@ -396,7 +359,7 @@ def reverse_engineer_api(target_url, test_param="9876543210"):
 # ============================================
 # 🎨 UI
 # ============================================
-LOGIN_PAGE = """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>💀 API REVERSE ENGINEER</title>
+LOGIN_PAGE = """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>💀 API REVERSE ENGINEER v4</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:system-ui}
@@ -413,7 +376,7 @@ input:focus{border-color:#0f0;outline:none}
 <div class="bg"></div>
 <div class="box">
 <h1>💀 API REVERSE ENGINEER</h1>
-<div class="tag">ULTIMATE • 100% REAL API</div>
+<div class="tag">v4.0 • 100% REAL API</div>
 <form method="post">
 <input type="text" name="user" placeholder="🔑 USERNAME" autocomplete="off">
 <input type="password" name="pass" placeholder="🔐 PASSWORD">
@@ -423,7 +386,7 @@ input:focus{border-color:#0f0;outline:none}
 </div>
 </body></html>"""
 
-DASHBOARD = """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>💀 API REVERSE ENGINEER</title>
+DASHBOARD = """<!DOCTYPE html><html><head><meta charset="UTF-8"><title>💀 API REVERSE ENGINEER v4</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;color:#ddd;font-family:system-ui;padding:10px}
@@ -446,33 +409,35 @@ label{font-size:0.55em;color:#888;display:block;margin-top:5px}
 </style></head><body>
 <div class="container">
 <div class="header">
-<div><h1>💀 API REVERSE ENGINEER v3.0</h1><div style="color:#888;font-size:0.45em">100% REAL API • ALL LOGS • NO DATA LOST</div></div>
+<div><h1>💀 API REVERSE ENGINEER v4.0</h1><div style="color:#888;font-size:0.45em">100% REAL API CAPTURE • ALL LOGS VISIBLE</div></div>
 <div style="display:flex;gap:8px;align-items:center">
-<span class="badge badge-on">ULTIMATE</span>
+<span class="badge badge-on">v4.0</span>
 <a href="/logout" style="color:#f00;text-decoration:none;font-size:0.55em">EXIT</a>
 </div>
 </div>
 
 <div class="card">
-<h3>🎯 TARGET URL</h3>
-<label>Website/API URL</label>
-<input type="text" id="targetUrl" placeholder="https://example.vercel.app" value="{{ last_url }}">
-<label>Test Parameter (number/ID)</label>
+<h3>🎯 ENTER URL</h3>
+<label>Website or API URL</label>
+<input type="text" id="targetUrl" placeholder="https://example.vercel.app/api/number?num=123" value="{{ last_url }}">
+<label>Test Parameter</label>
 <input type="text" id="testParam" placeholder="9876543210" value="{{ last_param }}">
-<button class="btn" onclick="startScan()">🔍 START REVERSE ENGINEERING</button>
-<div class="result-box" id="progress" style="max-height:200px;color:#ff0">💀 Ready. Enter URL and click button...</div>
+<button class="btn" onclick="startScan()">🔍 START SCAN</button>
+<div class="result-box" id="progress" style="max-height:200px;color:#ff0">💀 Ready. Enter URL and click START SCAN...</div>
 </div>
 
 <div class="card">
 <h3>🎯 REAL API FOUND</h3>
 <div class="real-api-box" id="realAPI">Waiting for scan...</div>
 <button class="btn btn-green" onclick="copyRealAPI()">📋 COPY REAL API</button>
+<button class="btn btn-yellow" onclick="testRealAPI()">🧪 TEST REAL API</button>
+<div class="result-box" id="testResult" style="max-height:150px;display:none;margin-top:6px"></div>
 </div>
 
 <div class="card">
-<h3>📋 COMPLETE SCAN LOGS (No data lost)</h3>
+<h3>📋 COMPLETE SCAN LOGS</h3>
 <div class="result-box" id="fullLogs" style="max-height:400px">
-<p style="color:#555;font-size:0.6em">All scan logs will appear here in real-time...</p>
+<p style="color:#555;font-size:0.6em">All scan logs appear here in real-time...</p>
 </div>
 </div>
 </div>
@@ -484,10 +449,35 @@ var scanInterval = null;
 function copyRealAPI() {
     if (realAPI) {
         navigator.clipboard.writeText(realAPI);
-        alert('✅ REAL API COPIED!\\n' + realAPI);
+        alert('✅ REAL API COPIED!\\n\\n' + realAPI);
     } else {
-        alert('⚠ No API found yet! Run scan first.');
+        alert('⚠ No API found yet!');
     }
+}
+
+function testRealAPI() {
+    if (!realAPI) { alert('⚠ No API found!'); return; }
+    var param = document.getElementById('testParam').value.trim() || '9876543210';
+    var testUrl = realAPI.replace('PARAM', param);
+    
+    document.getElementById('testResult').style.display = 'block';
+    document.getElementById('testResult').textContent = '⏳ Testing: ' + testUrl;
+    
+    fetch('/test_api', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: testUrl})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            document.getElementById('testResult').textContent = '✅ SUCCESS!\\nStatus: ' + d.status + '\\nSize: ' + d.size + ' bytes\\n\\n' + d.sample;
+            document.getElementById('testResult').style.color = '#0f0';
+        } else {
+            document.getElementById('testResult').textContent = '❌ FAILED\\n' + d.error;
+            document.getElementById('testResult').style.color = '#f00';
+        }
+    });
 }
 
 function startScan() {
@@ -502,7 +492,6 @@ function startScan() {
     
     if (scanInterval) clearInterval(scanInterval);
     
-    // Start scan
     fetch('/start_scan', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -511,15 +500,16 @@ function startScan() {
     .then(r => r.json())
     .then(d => {
         if (d.scan_id) {
-            // Poll for logs
             var scanId = d.scan_id;
             scanInterval = setInterval(function() {
                 fetch('/scan_logs?scan_id=' + scanId)
                 .then(r => r.json())
                 .then(logData => {
-                    if (logData.logs) {
+                    if (logData.logs && logData.logs.length > 0) {
                         document.getElementById('progress').textContent = logData.logs.join('\\n');
                         document.getElementById('progress').scrollTop = document.getElementById('progress').scrollHeight;
+                        document.getElementById('fullLogs').textContent = logData.logs.join('\\n');
+                        document.getElementById('fullLogs').scrollTop = document.getElementById('fullLogs').scrollHeight;
                         
                         if (logData.complete) {
                             clearInterval(scanInterval);
@@ -529,16 +519,10 @@ function startScan() {
                                 realAPI = logData.real_api;
                                 document.getElementById('realAPI').textContent = logData.real_api;
                                 document.getElementById('realAPI').style.color = '#0f0';
+                            } else {
+                                document.getElementById('realAPI').textContent = '⚠ API not found. Check logs.';
+                                document.getElementById('realAPI').style.color = '#f80';
                             }
-                            
-                            // Show full logs
-                            fetch('/full_logs?scan_id=' + scanId)
-                            .then(r => r.json())
-                            .then(fullData => {
-                                if (fullData.logs) {
-                                    document.getElementById('fullLogs').textContent = fullData.logs.join('\\n');
-                                }
-                            });
                         }
                     }
                 });
@@ -549,7 +533,7 @@ function startScan() {
 </script></body></html>"""
 
 # ============================================
-# STORAGE FOR SCANS
+# STORAGE
 # ============================================
 scan_storage = {}
 
@@ -585,57 +569,60 @@ def start_scan():
     session['last_url'] = url
     session['last_param'] = param
     
-    import uuid
-    import threading
+    import uuid, threading
     
     scan_id = str(uuid.uuid4())[:8]
     
-    # Initialize storage
     scan_storage[scan_id] = {
-        'logs': ['🔍 Starting scan for: ' + url],
+        'logs': [f'🔍 Starting scan: {url}'],
         'complete': False,
         'real_api': None
     }
     
-    # Run scan in background
     def run_scan():
         results = reverse_engineer_api(url, param)
-        
-        # Store ALL logs
-        scan_storage[scan_id]['logs'] = results.get('all_logs', results.get('all_requests_log', []))
+        scan_storage[scan_id]['logs'] = results.get('all_logs', [])
         scan_storage[scan_id]['complete'] = True
         scan_storage[scan_id]['real_api'] = results.get('real_api')
         
-        # Save to session
         if results.get('real_api'):
             if 'discovered_apis' not in session:
                 session['discovered_apis'] = []
-            if results['real_api'] not in session['discovered_apis']:
-                session['discovered_apis'].insert(0, results['real_api'])
+            session['discovered_apis'].insert(0, results['real_api'])
     
     t = threading.Thread(target=run_scan, daemon=True)
     t.start()
     
-    return jsonify({'scan_id': scan_id, 'status': 'started'})
+    return jsonify({'scan_id': scan_id})
 
 @app.route('/scan_logs')
 def scan_logs():
     scan_id = request.args.get('scan_id', '')
     if scan_id in scan_storage:
-        data = scan_storage[scan_id]
-        return jsonify({
-            'logs': data['logs'],
-            'complete': data['complete'],
-            'real_api': data['real_api']
-        })
+        d = scan_storage[scan_id]
+        return jsonify({'logs': d['logs'], 'complete': d['complete'], 'real_api': d['real_api']})
     return jsonify({'logs': ['Scan not found'], 'complete': False})
 
-@app.route('/full_logs')
-def full_logs():
-    scan_id = request.args.get('scan_id', '')
-    if scan_id in scan_storage:
-        return jsonify({'logs': scan_storage[scan_id]['logs']})
-    return jsonify({'logs': ['No logs']})
+@app.route('/test_api', methods=['POST'])
+def test_api():
+    if not session.get('auth'): return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    url = data.get('url', '')
+    
+    if not url: return jsonify({'success': False, 'error': 'URL required'})
+    
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0'}
+        resp = requests.get(url, headers=headers, timeout=15, verify=False)
+        return jsonify({
+            'success': True,
+            'status': resp.status_code,
+            'size': len(resp.text),
+            'sample': resp.text[:500]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)[:200]})
 
 @app.route('/logout')
 def logout():
@@ -643,7 +630,7 @@ def logout():
     return redirect('/')
 
 if __name__ == "__main__":
-    print("💀 API REVERSE ENGINEER v3.0 ULTIMATE")
+    print("💀 API REVERSE ENGINEER v4.0")
     import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, threaded=True)
